@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const {getDB} = require('../database/db');
 const ObjectId = require('mongodb').ObjectId;
 
+// SignUp API
 const signup = async (req, res) => {
     try{
         const {error} = signupValidator.validate(req.body);
@@ -15,6 +16,7 @@ const signup = async (req, res) => {
     const existingUser = await db.collection('users').findOne({email });
     if(existingUser) return res.status(400).json({success: false, message:"Email already registerd"});
 
+    // Hash password for security
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await db.collection('users').insertOne({
