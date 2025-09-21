@@ -11,7 +11,7 @@ let db;
 async function connectDB() {
     try{
         await client.connect();
-        db=client.db("Hotel_Heritage");
+        db=client.db("Heritage_Hotel");
         console.log("✅ MongoDb connected successfully");
     } catch(error){
         console.log("❌ MongoDB connection failed:", error.message);
