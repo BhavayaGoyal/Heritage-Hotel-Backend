@@ -1,30 +1,32 @@
-const express = require('express')
+const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv')
-const {connectDB} = require("./database/db")
-
+const dotenv = require('dotenv');
 dotenv.config();
+
+const { connectDB } = require('./database/db');
+const authRoutes = require('./routes/auth');
+const roomRoutes = require("./routes/room");
 const app = express();
 
 app.use(cors());
-app.use(express.json())
-
-connectDB();
-
-// const indexRouter = require('./routes/index')
-// app.use('/', indexRouter);
+app.use(express.json());
 
 app.get('/health', (req, res) => {
-    res.status(200).json({status: 'Okay', message: 'Server is running fine!'})
+  res.status(200).json({ status: 'Okay', message: 'Server is running fine!' });
 });
 
-const PORT = process.env.PORT || 5000;
+connectDB().then(() => {
+  console.log('✅ MongoDB connected successfully');
 
-app.listen(PORT, () => {
-    console.log(`Server Started On Port ${PORT}`)
-});
+  app.use('/api/auth', authRoutes);
 
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({error: 'Something went wrong!'});
+  app.use("/api/rooms", roomRoutes);
+
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server started on port ${PORT}`);
+  });
+
+}).catch(err => { 
+  console.error('❌ Failed to connect to MongoDB:', err);
 });
