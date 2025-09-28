@@ -3,7 +3,6 @@ const router = express.Router();
 const {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer, updateBooking} = require("../controllers/bookingController");
 const {validateCreateBooking, validateUpdateBooking} = require("../validators/bookingValidator");
 const {verifyToken, authorizeRoles} = require("../middleware/authMiddleware");
-const e = require("express");
 
 router.post(
     "/create",

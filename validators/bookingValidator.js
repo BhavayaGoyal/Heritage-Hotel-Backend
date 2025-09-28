@@ -7,7 +7,7 @@ const bookingSchema = Joi.object({
         "any.requires":"Customer Id is required"
     }),
 
-    serviceType: Joi.string().trim().valid("room", "hall", "restaurant", "extra_services").required().messages({
+    serviceCategory: Joi.string().trim().valid("room", "hall", "restaurant", "extra_services").required().messages({
         "any.only":"Service type must be out of one: room, hall, restaurant, extra_services.",
         "string.empty":"Service type is required",
         "any.required":"Service type is required"
