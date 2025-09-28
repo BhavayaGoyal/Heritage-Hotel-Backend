@@ -6,6 +6,7 @@ dotenv.config();
 const { connectDB } = require('./database/db');
 const authRoutes = require('./routes/auth');
 const roomRoutes = require("./routes/room");
+const bookingRoutes = require("./routes/booking");
 const app = express();
 
 app.use(cors());
@@ -21,6 +22,8 @@ connectDB().then(() => {
   app.use('/api/auth', authRoutes);
 
   app.use("/api/rooms", roomRoutes);
+
+  app.use("/api/bookings", bookingRoutes);
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
