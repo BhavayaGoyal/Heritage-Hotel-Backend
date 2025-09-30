@@ -5,14 +5,13 @@ async function generateBookingId() {
   const db = getDB();
   const bookings = db.collection("bookings");
 
-  // find the last booking with bookingId
   const lastBooking = await bookings.find({ _id: { $regex: /^book_\d+$/ } })
-    .sort({ _id: -1 }) // sort by _id descending
+    .sort({ _id: -1 })
     .limit(1)
     .toArray();
 
   if (lastBooking.length === 0 || !lastBooking[0]._id) {
-    return "book_041"; // start from 041
+    return "book_041"; 
   }
 
   const lastIdNum = parseInt(lastBooking[0]._id.split("_")[1]);
@@ -21,7 +20,6 @@ async function generateBookingId() {
   const newIdStr = String(newIdNum).padStart(3, "0");  
   return `book_${newIdStr}`;
 }
-
 
 
 // create bookings
@@ -138,5 +136,95 @@ const updateBooking = async (req, res) => {
     }
 };
 
-module.exports = {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer,updateBooking};
+const getAllBookingsWithDetails = async (req, res ) => {
+    try {
+        const db = getDB();
+        const bookings = db.collection("bookings");
+
+        const result = await bookings.aggregate([
+            {
+                $lookup: {
+                    from: "customers",
+                    localField: "customerId",
+                    "foreignField": "userId",
+                    as: "customer"
+                }
+            }, {$unwind: "$customer"},
+
+            {
+                $lookup: {
+                    from:{
+                        $switch: {
+                            branches: [
+                                {case: {$eq: ["$serviceCategory","room"]}, then:"rooms"},
+                                {case: {$eq: ["$serviceCategory","restaurant"]}, then:"restaurants"},
+                                {case: {$eq: ["$serviceCategory","halls"]}, then:"halls"},
+                                {case: {$eq:["$serviceCategory","service"]}, then:"services"}
+                            ],
+                            default:"services"
+                        },
+                    },
+                        localField:"serviceId",
+                        foreignField:"_id",
+                        as:"serviceDetails"
+                    }
+                },
+                   { $unwind: {path:"$serviceDetails", preserveNullAndEmptyArrays: true}}
+        ]).toArray();
+
+        res.json({success: true, bookings: result});
+    } catch (error) {
+        console.error("Error in getAllBookingsWithDetails: ", error);
+        res.status(500).json({success: false, message:"Internal server error"});
+    }
+};
+
+const getMyBookings = async (req, res) => {
+    try{
+        const db = getDB();
+        const bookings = db.collection("bookings");
+        const userId = new ObjectId(req.user.userId);
+
+        const result = await bookings.aggregate([
+            {$match: {customerId: userId}},
+            
+            {
+                $lookup:{
+                    from:"customers",
+                    localField:"customerId",
+                    foreignField:"userId",
+                    as:"customer"
+                }
+            },
+            {$unwind:"$customers"},
+
+            {
+                $lookup:{
+                    from:{
+                        $switch:{
+                            branches:[
+                               { case: { $eq: ["$serviceCategory", "room"] }, then: "rooms" },
+                               { case: { $eq: ["$serviceCategory", "hall"] }, then: "halls" },
+                               { case: { $eq: ["$serviceCategory", "restaurant"] }, then: "restaurants" },
+                               { case: { $eq: ["$serviceCategory", "service"] }, then: "services" } 
+                            ],
+                            default:"sevices"
+                        }
+                    },
+                    localField:"serviceId",
+                    foreignField:"_id",
+                    as:"serviceDetails"
+                }
+            },
+            {$unwind: {path:"$serviceDetails", preserveNullAndEmptyArrays: true}}
+        ]).toArray();
+
+        res.json({success: true, bookings: result});
+    }catch(error){
+        console.error("Error in getMyBookings: ", error);
+        res.status(500).json({success: false, message:"Internal server error"});
+    }
+};
+
+module.exports = {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer,updateBooking, getAllBookingsWithDetails, getMyBookings};
 

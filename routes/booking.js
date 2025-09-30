@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer, updateBooking} = require("../controllers/bookingController");
+const {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer, updateBooking, getMyBookings} = require("../controllers/bookingController");
 const {validateCreateBooking, validateUpdateBooking} = require("../validators/bookingValidator");
-const {verifyToken, authorizeRoles} = require("../middleware/authMiddleware");
+const {verifyToken, authorizeRoles, verifyRole} = require("../middleware/authMiddleware");
 
 router.post(
     "/create",
@@ -58,6 +58,20 @@ router.delete(
     verifyToken,
     authorizeRoles("admin","staff"),
     deletingBooking
+);
+
+router.get(
+    "/all",
+    verifyToken,
+    verifyRole("admin","staff"),
+    getAllBookings
+);
+
+router.get(
+    "/my",
+    verifyToken,
+    verifyRole("customer"),
+    getMyBookings
 );
 
 module.exports = router;
