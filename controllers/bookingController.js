@@ -142,34 +142,82 @@ const getAllBookingsWithDetails = async (req, res ) => {
         const bookings = db.collection("bookings");
 
         const result = await bookings.aggregate([
+            // join customer
             {
-                $lookup: {
-                    from: "customers",
+                $lookup:{
+                    from:"customers",
                     localField: "customerId",
-                    "foreignField": "userId",
+                    foreignField: "userId",
                     as: "customer"
                 }
-            }, {$unwind: "$customer"},
+            },
+            { $unwind: "$customer" },
 
+            // join rooms
             {
                 $lookup: {
-                    from:{
-                        $switch: {
-                            branches: [
-                                {case: {$eq: ["$serviceCategory","room"]}, then:"rooms"},
-                                {case: {$eq: ["$serviceCategory","restaurant"]}, then:"restaurants"},
-                                {case: {$eq: ["$serviceCategory","halls"]}, then:"halls"},
-                                {case: {$eq:["$serviceCategory","service"]}, then:"services"}
-                            ],
-                            default:"services"
-                        },
-                    },
-                        localField:"serviceId",
-                        foreignField:"_id",
-                        as:"serviceDetails"
+                   from: "rooms",
+                   localField: "serviceId",
+                   foreignField: "roomid",
+                   as: "roomDetails"
+                }
+            },
+
+            // join restaurants
+            {
+                $lookup:{
+                    from: "restaurants",
+                    localField: "serviceId",
+                    foreignField: "_id",
+                    as: "restaurantDetails" 
+                }
+            },
+
+            // join halls
+            {
+                $lookup:{
+                    from: "halls",
+                    localField: "serviceId",
+                    foreignField: "hallId",
+                    as: "hallDetails"
+                }
+            },
+
+            // join extra services
+            {
+                $lookup:{
+                    from:"services",
+                    localField:"serviceId",
+                    foreignField:"_id",
+                    as:"extraServiceDetails"
+                }
+            },
+
+            // merge into one field
+            {
+                $addFields: {
+                    serviceDetails: {
+                        $first: {
+                            $concatArrays: [
+                                "$roomDetails",
+                                "$restaurantDetails",
+                                "$hallDetails",
+                                "$extraServiceDetails"
+                            ]
+                        }
                     }
-                },
-                   { $unwind: {path:"$serviceDetails", preserveNullAndEmptyArrays: true}}
+                }
+            },
+
+            // cleanup
+            {
+                $project: {
+                    roomDetails: 0,
+                    restaurantDetails: 0,
+                    hallDetails: 0,
+                    extraServiceDetails: 0
+                }
+            }
         ]).toArray();
 
         res.json({success: true, bookings: result});
@@ -178,6 +226,7 @@ const getAllBookingsWithDetails = async (req, res ) => {
         res.status(500).json({success: false, message:"Internal server error"});
     }
 };
+
 
 const getMyBookings = async (req, res) => {
     try{

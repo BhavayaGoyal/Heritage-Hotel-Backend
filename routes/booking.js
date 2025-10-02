@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer, updateBooking, getMyBookings} = require("../controllers/bookingController");
+const {createBooking, getAllBookings, getBookingById, deletingBooking, getBookingsByCustomer, updateBooking, getMyBookings,getAllBookingsWithDetails} = require("../controllers/bookingController");
 const {validateCreateBooking, validateUpdateBooking} = require("../validators/bookingValidator");
 const {verifyToken, authorizeRoles, verifyRole} = require("../middleware/authMiddleware");
 
@@ -61,16 +61,16 @@ router.delete(
 );
 
 router.get(
-    "/all",
+    "/all/details",
     verifyToken,
-    verifyRole("admin","staff"),
-    getAllBookings
+    authorizeRoles("admin","staff"),
+    getAllBookingsWithDetails
 );
 
 router.get(
     "/my",
     verifyToken,
-    verifyRole("customer"),
+    authorizeRoles("customer"),
     getMyBookings
 );
 
