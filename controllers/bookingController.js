@@ -104,8 +104,21 @@ const deletingBooking = async (req, res) => {
 const getBookingsByCustomer = async (req, res) => {
     try {
         const db = getDB();
-        const {customerId} = req.params;
-        const bookings = await db.collection("bookings").find({customerId}).toArray();
+    const { customerId } = req.params;
+
+    if (!ObjectId.isValid(customerId)) {
+      return res.status(400).json({ error: "Invalid customerId" });
+    }
+
+    const bookings = await db.collection("bookings")
+      .find({ customerId: new ObjectId(customerId) })
+      .toArray();
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ message: "No bookings found for this customer" });
+    }
+
+
         res.json(bookings);
 
     } catch (error) {
