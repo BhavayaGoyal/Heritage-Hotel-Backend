@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth');
 const roomRoutes = require("./routes/room");
 const bookingRoutes = require("./routes/booking");
 const customerRoutes  = require("./routes/customer");
+const paymentRoutes = require("./routes/payment");
 const app = express();
 
 app.use(cors());
@@ -27,6 +28,8 @@ connectDB().then(() => {
   app.use("/api/bookings", bookingRoutes);
 
   app.use("/api/customers", customerRoutes);
+
+  app.use("/api/payments", paymentRoutes);
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
