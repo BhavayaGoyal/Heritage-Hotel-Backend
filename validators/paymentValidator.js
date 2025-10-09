@@ -20,4 +20,16 @@ const paymentSchema = Joi.object({
     }),
 });
 
-module.exports={paymentSchema};
+const paymentUpdateSchema = Joi.object({
+  bookingId: Joi.string().optional(),
+  roomIds: Joi.array().items(Joi.string()).optional(),
+  hallIds: Joi.array().items(Joi.string()).optional(),
+  serviceIds: Joi.array().items(Joi.string()).optional(),
+  restaurantIds: Joi.array().items(Joi.string()).optional(),
+  paymentMethod: Joi.string()
+    .valid("Cash", "Debit Card", "Credit Card", "UPI", "Netbanking")
+    .optional(),
+  status: Joi.string().valid("paid", "pending", "refunded").optional()
+});
+
+module.exports={paymentSchema, paymentUpdateSchema};
