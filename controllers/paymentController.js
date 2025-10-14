@@ -21,7 +21,7 @@ const createPayment = async (req, res) => {
   try {
     const db = getDB();
     const paymentId = await generatePaymentId();
-    const { bookingId, roomIds = [], hallIds = [], serviceIds = [], restaurantIds = [], paymentMethod } = req.body;
+    const { bookingId, roomIds = [], hallIds = [], serviceIds = [], restaurantIds = [], paymentMethod, promoCode } = req.body;
 
     const bookings = db.collection("bookings");
     const customers = db.collection("customers");
@@ -30,43 +30,101 @@ const createPayment = async (req, res) => {
     const services = db.collection("services");
     const restaurants = db.collection("restaurants");
     const payments = db.collection("payments");
+    const promotions = db.collection("promotions");
 
-    // 1️⃣ Fetch booking
     const booking = await bookings.findOne({ _id: bookingId });
     if (!booking) return res.status(404).json({ error: "Booking not found!" });
 
-    // 2️⃣ Fetch customer linked to logged-in user
-    const customer = await customers.findOne({ userId: new ObjectId(req.user.id) });
+    let customer;
+    const { customerId } = req.body;
+    if (req.user?.id) {
+      customer = await customers.findOne({ userId: new ObjectId(req.user.id) });
+    } else if (customerId) {
+      customer = await customers.findOne({ _id: new ObjectId(customerId) });
+    }
+
     if (!customer) return res.status(404).json({ error: "Customer not found!" });
 
-    // 3️⃣ Calculate total amount
+    const parsePrice = (val) =>{
+      if(!val) return 0;
+      const num = String(val).replace(/[^\d.]/g, ""); 
+      return num ? Number(num) : 0;
+    };
+
     let totalAmount = 0;
 
     if (roomIds.length > 0) {
       const selectedRooms = await rooms.find({ roomId: { $in: roomIds } }).toArray();
-      totalAmount += selectedRooms.reduce((sum, r) => sum + (r.price || 0), 0);
+      const roomTotal = selectedRooms.reduce((sum, r) => sum + parsePrice(r.price), 0);
+      totalAmount += roomTotal;
     }
 
     if (hallIds.length > 0) {
       const selectedHalls = await halls.find({ hallId: { $in: hallIds } }).toArray();
-      totalAmount += selectedHalls.reduce((sum, h) => sum + (h.price || 0), 0);
+      totalAmount += selectedHalls.reduce((sum, h) => sum + parsePrice(h.price || 0), 0);
     }
 
     if (restaurantIds.length > 0) {
       const selectedRestaurants = await restaurants.find({ restaurantId: { $in: restaurantIds } }).toArray();
-      totalAmount += selectedRestaurants.reduce((sum, r) => sum + (r.price || 0), 0);
+      totalAmount += selectedRestaurants.reduce((sum, r) => sum + parsePrice(r.price || 0), 0);
     }
 
     if (serviceIds.length > 0) {
       const selectedServices = await services.find({ serviceId: { $in: serviceIds } }).toArray();
-      totalAmount += selectedServices.reduce((sum, s) => sum + (s.price || 0), 0);
+      totalAmount += selectedServices.reduce((sum, s) => sum + parsePrice(s.price || 0), 0);
     }
+    console.log("🧾 Total before promo:", totalAmount);
 
-    // 4️⃣ Create payment
+    let discountApplied = 0;
+    let promotionUsed = null;
+    let promoMessage = "No promotion applied";
+
+    if(promoCode){
+      const currentDate = new Date();
+      console.log("Searching promo code:", promoCode, "at", new Date());
+
+      const promoTrimmed = promoCode.trim().toUpperCase();
+      const promo = await promotions.findOne({
+        promoCode: promoTrimmed,
+        status: "active",
+        validFrom: {$lte: currentDate},
+        validTo: {$gte: currentDate},
+      });
+      console.log("Found promo:", promo);
+
+      if(promo){
+        const allSelectedCategories = [];
+        if(roomIds.length>0) allSelectedCategories.push("room");
+        if (hallIds.length > 0) allSelectedCategories.push("hall");
+        if (serviceIds.length > 0) allSelectedCategories.push("service");
+        if (restaurantIds.length > 0) allSelectedCategories.push("restaurant");
+        console.log("Promo applicable categories:", promo.applicableCategories);
+console.log("All selected categories:", allSelectedCategories);
+
+        const applicable = promo.applicableCategories.some(cat => allSelectedCategories.includes(cat));
+
+        if(applicable){
+          console.log(`✅ Promotion applied: ${promo.discountType} ${promo.discountValue}, applicable categories:`, promo.applicableCategories);
+
+          if(promo.discountType === "percentage"){
+            discountApplied = (totalAmount*promo.discountValue)/100;
+          } else if(promo.discountType === "flat"){
+            discountApplied = promo.discountValue;
+          }
+          totalAmount-=discountApplied;
+          promotionUsed= promo._id;
+          promoMessage = `Promotion applied. You saved ${discountApplied} Rs.`;
+        } else {
+          promoMessage = "Promo code is not applicable for selected categories.";
+        }
+      } else{
+        promoMessage = "Invalid or expired promo code";
+      }
+    }
     const newPayment = {
       paymentId,
       bookingId,
-      customerId: customer._id, // ✅ correct ObjectId
+      customerId: customer._id, 
       roomIds,
       hallIds,
       serviceIds,
@@ -74,11 +132,19 @@ const createPayment = async (req, res) => {
       totalAmount,
       paymentMethod,
       status: "paid",
+      promotionUsed,
+      discountApplied,
+      promoCode: promotionUsed ? promoCode : null,
+      promoMessage,
       createdAt: new Date(),
     };
 
     const result = await payments.insertOne(newPayment);
-    res.status(201).json({ message: "Payment created successfully", payment: newPayment });
+    res.status(201).json({ message: "Payment created successfully", payment: {
+        ...newPayment,
+        totalAmount: `${newPayment.totalAmount} Rs.`,
+      }, 
+    });
 
   } catch (error) {
     console.error("Error creating payment:", error);

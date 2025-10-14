@@ -9,6 +9,7 @@ const roomRoutes = require("./routes/room");
 const bookingRoutes = require("./routes/booking");
 const customerRoutes  = require("./routes/customer");
 const paymentRoutes = require("./routes/payment");
+const promotionRoute = require("./routes/promotions");
 const app = express();
 
 app.use(cors());
@@ -30,6 +31,8 @@ connectDB().then(() => {
   app.use("/api/customers", customerRoutes);
 
   app.use("/api/payments", paymentRoutes);
+
+  app.use("/api/promotions", promotionRoute)
 
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {

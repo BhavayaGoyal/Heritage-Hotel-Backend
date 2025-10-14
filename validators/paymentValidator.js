@@ -18,6 +18,10 @@ const paymentSchema = Joi.object({
         "any.required":"Payment Method is required",
         "any.only":"Payment method must be one of: Cash, Debit Card, UPI, Netbanking or Credit Card"
     }),
+    promoCode: Joi.string().optional().messages({
+        "string.base":"Promotion code must be a string"
+    })
+    
 });
 
 const paymentUpdateSchema = Joi.object({
