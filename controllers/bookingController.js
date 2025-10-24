@@ -21,37 +21,57 @@ async function generateBookingId() {
   return `book_${newIdStr}`;
 }
 
+const createBooking = async (req, res) => {
+  try {
+    const db = getDB();
+    const bookings = db.collection("bookings");
 
-// create bookings
+    // Extract role-based info
+    const role = req.user?.role;
+    const userId = req.user?.id;
 
-const createBooking = async(req, res) => {
-    try {
-        const db = getDB();
-        const bookings = db.collection("bookings");
+    const booking = req.body;
+    const bookingId = await generateBookingId();
 
-        const booking = req.body;
-        const bookingId = await generateBookingId();
-
-        const bookingDoc = {
-            _id: bookingId,
-            customerId: booking.customerId,
-            serviceCategory : booking.serviceCategory,
-            serviceId : booking.serviceId,
-            date: new Date(booking.date).toISOString().split("T")[0],
-            time: booking.time,
-            status: booking.status || "Confirmed",
-            numberOfGuests: booking.numberOfGuests
-        };
-
-        await bookings.insertOne(bookingDoc);
-        res.status(201).json({message: "Booking created ", bookingId});
-    } catch (error) {
-        console.error("Error while creating booking: ",error);
-        res.status(500).json({error: error.message || "Something went wrong" });
+    // 🧩 Role check — customers can only create their own booking
+    if (role === "customer" && booking.customerId && booking.customerId !== userId) {
+      return res.status(403).json({
+        error: "Customers can only create their own bookings",
+      });
     }
-};
 
-// get all bookings
+    const bookingDoc = {
+      _id: bookingId,
+      customerId: new ObjectId(role === "customer" ? userId : booking.customerId),
+      serviceCategory: booking.serviceCategory, // room | hall | restaurant | service
+      serviceId: booking.serviceId,
+      bookingDate: booking.bookingDate, // "YYYY-MM-DD"
+      bookingTime: booking.bookingTime, // "HH:mm"
+      numberOfGuests: booking.numberOfGuests || 1,
+      status: booking.status || "confirmed",
+      details: {
+        eventName: booking.details?.eventName || "",
+        durationDays: booking.details?.durationDays || 1,
+        specialRequest: booking.details?.specialRequest || "",
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await bookings.insertOne(bookingDoc);
+
+    res.status(201).json({
+      message: "Booking created successfully",
+      bookingId,
+      data: bookingDoc,
+    });
+  } catch (error) {
+    console.error("Error while creating booking:", error);
+    res.status(500).json({
+      error: error.message || "Something went wrong while creating booking",
+    });
+  }
+};
 
  const getAllBookings = async (req, res) => {
     try {
