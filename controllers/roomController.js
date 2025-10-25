@@ -1,4 +1,3 @@
-
 const {getDB} = require("../database/db");
 
 const getAllRooms = async (req, res) => {
