@@ -25,6 +25,7 @@ const createBooking = async (req, res) => {
   try {
     const db = getDB();
     const bookings = db.collection("bookings");
+    const customers = db.collection("customers");
 
     // Extract role-based info
     const role = req.user?.role;
@@ -33,20 +34,45 @@ const createBooking = async (req, res) => {
     const booking = req.body;
     const bookingId = await generateBookingId();
 
-    // 🧩 Role check — customers can only create their own booking
-    if (role === "customer" && booking.customerId && booking.customerId !== userId) {
-      return res.status(403).json({
-        error: "Customers can only create their own bookings",
+    // 🧩 For customers, automatically get their customerId from the customers collection
+    let customerId;
+    if (role === "customer") {
+      const customer = await customers.findOne({ userId: new ObjectId(userId) });
+      if (!customer) {
+        return res.status(404).json({ error: "Customer profile not found" });
+      }
+      customerId = customer._id;
+    } else {
+      // For staff/admin, use provided customerId in the request
+      if (!booking.customerId) {
+        return res.status(400).json({ error: "customerId is required for admin/staff bookings" });
+      }
+      customerId = new ObjectId(booking.customerId);
+    }
+
+    // ✅ Hall availability check (optional, only if booking a hall)
+    if (booking.serviceCategory === "hall") {
+      const existingHallBooking = await bookings.findOne({
+        serviceCategory: "hall",
+        serviceId: booking.serviceId,
+        bookingDate: booking.bookingDate,
+        bookingTime: booking.bookingTime,
+        status: { $in: ["confirmed", "pending"] },
       });
+      if (existingHallBooking) {
+        return res.status(400).json({
+          error: "This hall is already booked for the selected date and time.",
+        });
+      }
     }
 
     const bookingDoc = {
       _id: bookingId,
-      customerId: new ObjectId(role === "customer" ? userId : booking.customerId),
-      serviceCategory: booking.serviceCategory, // room | hall | restaurant | service
+      customerId,
+      serviceCategory: booking.serviceCategory,
       serviceId: booking.serviceId,
-      bookingDate: booking.bookingDate, // "YYYY-MM-DD"
-      bookingTime: booking.bookingTime, // "HH:mm"
+      bookingDate: booking.bookingDate,
+      bookingTime: booking.bookingTime,
       numberOfGuests: booking.numberOfGuests || 1,
       status: booking.status || "confirmed",
       details: {
@@ -72,6 +98,7 @@ const createBooking = async (req, res) => {
     });
   }
 };
+
 
  const getAllBookings = async (req, res) => {
     try {
