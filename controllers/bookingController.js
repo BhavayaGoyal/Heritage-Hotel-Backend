@@ -24,81 +24,56 @@ async function generateBookingId() {
 const createBooking = async (req, res) => {
   try {
     const db = getDB();
-    const bookings = db.collection("bookings");
-    const customers = db.collection("customers");
-
-    // Extract role-based info
+    const { serviceCategory, serviceId, bookingDate, bookingTime, numberOfGuests } = req.body;
     const role = req.user?.role;
     const userId = req.user?.id;
 
-    const booking = req.body;
+    // Role check
+    if (role === "customer" && req.body.customerId && req.body.customerId !== userId) {
+      return res.status(403).json({ error: "Customers can only create their own bookings" });
+    }
+
+    // Availability check
+    let isAvailable = false;
+    if (serviceCategory === "hall") {
+      isAvailable = await checkHallAvailability(serviceId, bookingDate, bookingTime);
+    } else if (serviceCategory === "restaurant") {
+      isAvailable = await checkRestaurantAvailability(serviceId, bookingDate, bookingTime, numberOfGuests);
+    } else if (serviceCategory === "room") {
+      isAvailable = await checkRoomAvailability(serviceId, bookingDate, bookingTime);
+    }
+
+    if (!isAvailable) return res.status(400).json({ error: `${serviceCategory} not available at this time` });
+
+    // Generate booking
     const bookingId = await generateBookingId();
-
-    // 🧩 For customers, automatically get their customerId from the customers collection
-    let customerId;
-    if (role === "customer") {
-      const customer = await customers.findOne({ userId: new ObjectId(userId) });
-      if (!customer) {
-        return res.status(404).json({ error: "Customer profile not found" });
-      }
-      customerId = customer._id;
-    } else {
-      // For staff/admin, use provided customerId in the request
-      if (!booking.customerId) {
-        return res.status(400).json({ error: "customerId is required for admin/staff bookings" });
-      }
-      customerId = new ObjectId(booking.customerId);
-    }
-
-    // ✅ Hall availability check (optional, only if booking a hall)
-    if (booking.serviceCategory === "hall") {
-      const existingHallBooking = await bookings.findOne({
-        serviceCategory: "hall",
-        serviceId: booking.serviceId,
-        bookingDate: booking.bookingDate,
-        bookingTime: booking.bookingTime,
-        status: { $in: ["confirmed", "pending"] },
-      });
-      if (existingHallBooking) {
-        return res.status(400).json({
-          error: "This hall is already booked for the selected date and time.",
-        });
-      }
-    }
-
     const bookingDoc = {
       _id: bookingId,
-      customerId,
-      serviceCategory: booking.serviceCategory,
-      serviceId: booking.serviceId,
-      bookingDate: booking.bookingDate,
-      bookingTime: booking.bookingTime,
-      numberOfGuests: booking.numberOfGuests || 1,
-      status: booking.status || "confirmed",
+      customerId: new ObjectId(role === "customer" ? userId : req.body.customerId),
+      serviceCategory,
+      serviceId,
+      bookingDate,
+      bookingTime,
+      numberOfGuests: numberOfGuests || 1,
+      status: req.body.status || "confirmed",
       details: {
-        eventName: booking.details?.eventName || "",
-        durationDays: booking.details?.durationDays || 1,
-        specialRequest: booking.details?.specialRequest || "",
+        eventName: req.body.details?.eventName || "",
+        durationDays: req.body.details?.durationDays || 1,
+        specialRequest: req.body.details?.specialRequest || ""
       },
       createdAt: new Date(),
-      updatedAt: new Date(),
+      updatedAt: new Date()
     };
 
-    await bookings.insertOne(bookingDoc);
+    await db.collection("bookings").insertOne(bookingDoc);
 
-    res.status(201).json({
-      message: "Booking created successfully",
-      bookingId,
-      data: bookingDoc,
-    });
+    res.status(201).json({ message: "Booking created successfully", bookingId, data: bookingDoc });
+
   } catch (error) {
-    console.error("Error while creating booking:", error);
-    res.status(500).json({
-      error: error.message || "Something went wrong while creating booking",
-    });
+    console.error("Error in createBooking:", error);
+    res.status(500).json({ error: error.message || "Something went wrong while creating booking" });
   }
 };
-
 
  const getAllBookings = async (req, res) => {
     try {
